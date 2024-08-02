@@ -1,9 +1,12 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
 from rest_framework import status
-from blog.models import Category, Post
-from django.shortcuts import get_list_or_404, get_object_or_404
-from .serializers import PostSerializer, CategorySerializer
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import viewsets
+
+from blog.models import Category, Post, Comment
+from .serializers import PostSerializer, CategorySerializer, CommentListSerializer, ReplySerializer, CommentSerializer
 
 
 class PostListView(APIView):
@@ -48,3 +51,55 @@ class PostDetailView(APIView):
         serializer = PostSerializer(post_obj)
         return Response(serializer.data)
 
+
+# class CommentViewSet(viewsets.ModelViewSet):
+#     queryset = Comment.objects.all()
+#     serializer_class = CommentListSerializer
+
+
+class CommentViewSet(viewsets.ViewSet):
+    @action(methods=['post'], detail=False)
+    def create_reply(self, request):
+        serializer = ReplySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def get_object(self, pk):
+        return get_object_or_404(Comment, pk=pk)
+
+    def list(self, request):
+        comments = Comment.objects.all()
+        serializer = CommentListSerializer(comments, many=True)
+        return Response(serializer.data)
+
+    def create(self, request):
+        serializer = CommentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def retrieve(self, request, pk=None):
+        comment = self.get_object(pk)
+        serializer = CommentListSerializer(comment)
+        return Response(serializer.data)
+
+    def update(self, request, pk=None):
+        serializer = CommentSerializer(self.get_object(pk), data=request.data)
+        serializer.is_valid(raise_exception=True)
+        print(serializer)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, pk=None):
+        instances = self.get_object(pk)
+        serializer = CommentSerializer(data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.update(instance=instances, validated_data=serializer.validated_data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        comment = self.get_object(pk)
+        comment.delete()
+        return Response({"detail": "Comment has been deleted"}, status=status.HTTP_204_NO_CONTENT)
